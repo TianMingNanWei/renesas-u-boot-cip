@@ -1,6 +1,25 @@
 #include "rzg2ul_video.h"
 #include <common.h>
 #include <command.h>
+#include <i2c.h>
+
+// 添加 ADV7513 相关定义
+#define ADV7513_I2C_ADDR 0x39
+#define ADV7513_CEC_I2C_ADDR 0x3C
+#define ADV7513_CHIP_REVISION     0x00
+#define ADV7513_POWER             0x41
+#define ADV7513_HPD_CTRL          0xD6
+
+// CEC 相关定义
+#define ADV7511_REG_CEC_CTRL 0x00
+#define ADV7511_REG_CEC_LOG_ADDR_MASK 0x01
+#define ADV7511_REG_CEC_LOG_ADDR_0_1 0x02
+#define ADV7511_REG_CEC_CLK_DIV 0x03
+#define ADV7511_REG_INT_ENABLE(n) (0x10 + (n) * 0x04)
+#define ADV7511_INT1_CEC_TX_READY (1 << 0)
+#define ADV7511_INT1_CEC_TX_ARBIT_LOST (1 << 1)
+#define ADV7511_INT1_CEC_TX_RETRY_TIMEOUT (1 << 2)
+#define ADV7511_INT1_CEC_RX_READY1 (1 << 3)
 
 // Function declarations
 static void rzg2ul_cpg_init(void);
@@ -8,6 +27,44 @@ static void rzg2ul_cpg_init(void);
 static void rzg2ul_du_init(void);
 static void rzg2ul_vcpd_init(void);
 static void rzg2ul_lcdc_start(void);
+static void rzg2ul_adv7513_init(void);
+
+static int adv7513_i2c_reg_write(struct udevice *dev, uint addr, uint mask, uint data)
+{
+    uint8_t valb;
+    int err;
+
+    if (mask != 0xff)
+    {
+        err = dm_i2c_read(dev, addr, &valb, 1);
+        if (err)
+            return err;
+
+        valb &= ~mask;
+        valb |= data;
+    }
+    else
+    {
+        valb = data;
+    }
+
+    err = dm_i2c_write(dev, addr, &valb, 1);
+    return err;
+}
+
+/* I2C Read Register */
+static int adv7513_i2c_reg_read(struct udevice *dev, uint8_t addr, uint8_t *data)
+{
+    uint8_t valb;
+    int err;
+
+    err = dm_i2c_read(dev, addr, &valb, 1);
+    if (err)
+        return err;
+
+    *data = (int)valb;
+    return 0;
+}
 
 // Video initialization function
 int rzg2ul_video_init(void) {
@@ -18,7 +75,7 @@ int rzg2ul_video_init(void) {
     rzg2ul_du_init();
     rzg2ul_vcpd_init();
     rzg2ul_lcdc_start();
-
+    rzg2ul_adv7513_init();
     return 0;
 }
 
@@ -137,8 +194,10 @@ static const uint32_t vcpd_register_values[][2] = {//0x10870000  //still picture
 static void rzg2ul_registers_set(const uint32_t (*arr)[2], uint32_t len) {
     for (int i = 0; i < len; i++) {
         if (arr[i][0] == 0) {
+            printf("Delay: %ld us\r\n", arr[i][1]);
             udelay(arr[i][1]);
         } else {
+            printf("Write Register: 0x%lx, Value: 0x%lx\r\n", arr[i][0], arr[i][1]);
             writel(arr[i][1], ((uint64_t)(arr[i][0])));
         }
     }
@@ -176,9 +235,89 @@ static void rzg2ul_vcpd_init(void) {
 // Start LCDC
 static void rzg2ul_lcdc_start(void) {
     // Start Video Output
+    printf("Start Video Output\r\n");
+    printf("VSPD_base_addr: 0x%lx\r\n", VSPD_base_addr);
     reg_write(VSPD_base_addr + 0x0000, 0x00000001); // VI6_CMD0: STRCMD=1
+    printf("wait until VI6_DISP0_IRQ_STA.DST=1\r\n");
     while ((reg_read(VSPD_base_addr + 0x007C) & 0x00000100) != 0x00000100); // Wait until VI6_DISP0_IRQ_STA.DST=1
-
+    printf("DU_base_addr: 0x%lx\r\n", DU_base_addr);
     reg_write(DU_base_addr + 0x0000, 0x00000100); // DU_MCR0 : DI_EN=1
+
     // while ((reg_read(DSI_LINK_base_addr + ISR) & 0x00000100) != 0x00000100); // ISR.VIN1
+}
+
+struct reg_sequence {
+    uint8_t reg;
+    uint8_t def;
+};
+
+static const struct reg_sequence adv7513_fixed_registers[] = {
+    { 0x98, 0x03 },
+    { 0x9a, 0xe0 },
+    { 0x9c, 0x30 },
+    { 0x9d, 0x61 },
+    { 0xa2, 0xa4 },
+    { 0xa3, 0xa4 },
+    { 0xe0, 0xd0 },
+    { 0xf9, 0x00 },
+    { 0x55, 0x02 },
+};
+
+// 添加 ADV7513 初始化函数
+static void rzg2ul_adv7513_init(void)
+{    
+    struct udevice *bus = NULL, *dev = NULL, *cec_dev = NULL;
+    uint8_t chip_rev;
+    int ret,i = 0;
+
+    printf("ADV7513 Init\r\n");
+
+    /* Get I2C Bus */
+    if (uclass_get_device_by_name(UCLASS_I2C, "i2c@10058400", &bus)) {
+        puts("Cannot find I2C bus!\n");
+        return;
+    }
+
+    /* Get Device */
+    ret = i2c_get_chip(bus, ADV7513_I2C_ADDR, 1, &dev);
+    if (ret) {
+        printf("Cannot get ADV7513 device at address 0x%02x!\n", ADV7513_I2C_ADDR);
+        return;
+    }
+
+    /* Get Device */
+    ret = i2c_get_chip(bus, ADV7513_CEC_I2C_ADDR, 1, &cec_dev);
+    if (ret) {
+        printf("Cannot get ADV7513 CEC device at address 0x%02x!\n", ADV7513_CEC_I2C_ADDR);
+        return;
+    }
+
+    // 读取芯片版本
+    ret = adv7513_i2c_reg_read(dev, ADV7513_CHIP_REVISION, &chip_rev);
+    if (ret) {
+        printf("Failed to read ADV7513 chip revision\n");
+        return;
+    }
+    printf("ADV7513 chip revision: 0x%02x\n", chip_rev);
+
+    // 上电
+    adv7513_i2c_reg_write(dev, ADV7513_POWER, 0xff, 0x10);
+    
+    // Write fixed registers
+    for (i = 0; i < ARRAY_SIZE(adv7513_fixed_registers); i++) {
+        ret = adv7513_i2c_reg_write(dev, adv7513_fixed_registers[i].reg, 0xff, adv7513_fixed_registers[i].def);
+        if (ret) {
+            printf("Failed to write ADV7513 register 0x%02x\n", adv7513_fixed_registers[i].reg);
+            return ret;
+        }
+    }
+
+    // Set 720p resolution
+    adv7513_i2c_reg_write(dev, 0x15, 0xff, 0x01); // Input color depth and style
+    adv7513_i2c_reg_write(dev, 0x16, 0xff, 0x38); // Output format: RGB888
+    adv7513_i2c_reg_write(dev, 0x17, 0xff, 0x02); // Aspect ratio: 16:9
+    adv7513_i2c_reg_write(dev, 0x18, 0xff, 0x46); // Set 720p timing
+    adv7513_i2c_reg_write(dev, 0xaf, 0xff, 0x20); // Set HDMI mode
+
+    printf("ADV7513 initialized for 720p RGB888\n");
 }
