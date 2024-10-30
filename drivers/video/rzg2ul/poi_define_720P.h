@@ -1,5 +1,13 @@
-#ifndef __DSI_DEFINE__
-#define __DSI_DEFINE__
+/*
+ * RZ/G2UL 720P Display Parameters
+ *
+ * Copyright (C) 2024 Renesas Electronics Corp.
+ *
+ * 该文件定义了720P显示所需的时序参数
+ */
+
+#ifndef __POI_DEFINE_720P__
+#define __POI_DEFINE_720P__
 
 // PLL2.FOUT3 = 533.333 MHz, lpcalk = 533.333 / 2 / 16 = 16.666 MHz
 #define CPG_LPCLK_DIV       0 // CPG_PL2_DDIV
@@ -45,4 +53,4 @@
 #define LCD_ODE             0
 #define LCD_CFMT            0
 
-#endif // !__DSI_DEFINE__
+#endif // !__POI_DEFINE_720P__

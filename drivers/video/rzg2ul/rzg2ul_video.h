@@ -1,3 +1,10 @@
+/*
+ * RZ/G2UL Video Driver Header
+ *
+ * Copyright (C) 2024 Renesas Electronics Corp.
+ *
+ * 该头文件定义了RZ/G2UL视频驱动所需的各种宏和数据结构
+ */
 #ifndef _RZG2UL_VIDEO_H_
 #define _RZG2UL_VIDEO_H_
 
@@ -15,7 +22,7 @@
 #include "rzg2ul_def.h"
 
 /* Screen Header */
-// #include "poi_define_400P.h"
+// #include "poi_define_480P.h"
 #include "poi_define_720P.h"
 
 /* Du Define */

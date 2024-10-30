@@ -1,45 +1,57 @@
+/*
+ * RZ/G2UL Video Driver
+ *
+ * Copyright (C) 2024 Renesas Electronics Corp.
+ *
+ * 本驱动用于初始化RZ/G2UL的视频输出功能,包括:
+ * - CPG时钟配置
+ * - DU(Display Unit)配置 
+ * - VSPD(Video Signal Processor)配置
+ * - ADV7513 HDMI发送器配置
+ */
 #include "rzg2ul_video.h"
 #include <common.h>
 #include <command.h>
 #include <i2c.h>
 
-// 添加 ADV7513 相关定义
-#define ADV7513_I2C_ADDR 0x39
-#define ADV7513_CEC_I2C_ADDR 0x3C
-#define ADV7513_CHIP_REVISION 0x00
-#define ADV7513_POWER 0x41
-#define ADV7513_HPD_CTRL 0xD6
+/* ADV7513 寄存器定义 */
+#define ADV7513_I2C_ADDR 0x39          // 主I2C地址
+#define ADV7513_CEC_I2C_ADDR 0x3C      // CEC I2C地址 
+#define ADV7513_CHIP_REVISION 0x00     // 芯片版本寄存器
+#define ADV7513_POWER 0x41             // 电源控制寄存器
+#define ADV7513_HPD_CTRL 0xD6          // HPD控制寄存器
 
-// CEC 相关定义
-#define ADV7511_REG_CEC_CTRL 0x00
-#define ADV7511_REG_CEC_LOG_ADDR_MASK 0x01
-#define ADV7511_REG_CEC_LOG_ADDR_0_1 0x02
-#define ADV7511_REG_CEC_CLK_DIV 0x03
-#define ADV7511_REG_INT_ENABLE(n) (0x10 + (n) * 0x04)
-#define ADV7511_INT1_CEC_TX_READY (1 << 0)
-#define ADV7511_INT1_CEC_TX_ARBIT_LOST (1 << 1)
-#define ADV7511_INT1_CEC_TX_RETRY_TIMEOUT (1 << 2)
-#define ADV7511_INT1_CEC_RX_READY1 (1 << 3)
+/* CEC相关寄存器定义 */
+#define ADV7511_REG_CEC_CTRL 0x00           // CEC控制寄存器
+#define ADV7511_REG_CEC_LOG_ADDR_MASK 0x01  // CEC逻辑地址掩码
+#define ADV7511_REG_CEC_LOG_ADDR_0_1 0x02   // CEC逻辑地址0-1
+#define ADV7511_REG_CEC_CLK_DIV 0x03        // CEC时钟分频
+#define ADV7511_REG_INT_ENABLE(n) (0x10 + (n) * 0x04)  // 中断使能寄存器n
 
-#define reg_write(addr, val) writel((val), ((uint64_t)addr))
-#define reg_read(addr) readl(addr)
+/* CEC中断位定义 */
+#define ADV7511_INT1_CEC_TX_READY (1 << 0)          // CEC发送就绪
+#define ADV7511_INT1_CEC_TX_ARBIT_LOST (1 << 1)     // CEC发送仲裁丢失
+#define ADV7511_INT1_CEC_TX_RETRY_TIMEOUT (1 << 2)  // CEC发送重试超时
+#define ADV7511_INT1_CEC_RX_READY1 (1 << 3)         // CEC接收就绪1
 
-#define PMC(off)		(0x0200 + (off))
-#define PFC(off)		(0x0400 + (off) * 4)
-#define PWPR (0x3014)                    /* Port Write Protection Register */
-#define PWPR_G3S (0x3000)
-#define IOLH(off)		(0x1000 + (off) * 8)
-#define PUPD(off)		(0x1C00 + (off) * 8)
-#define SR(off)			(0x1400 + (off) * 8)
+/* 寄存器读写宏定义 */
+#define BIT(nr)			(1UL << (nr))
+
+/* PFC寄存器偏移定义 */
+#define PMC(off)    (0x0200 + (off))      // 端口模式控制
+#define PFC(off)    (0x0400 + (off) * 4)  // 端口功能控制  
+#define PWPR        (0x3014)              // 端口写保护寄存器
+#define PWPR_G3S    (0x3000)
+#define IOLH(off)   (0x1000 + (off) * 8)  // IO电平控制
+#define PUPD(off)   (0x1C00 + (off) * 8)  // 上下拉控制
+#define SR(off)     (0x1400 + (off) * 8)  // 转换速率控制
+#define PM(off)		(0x0100 + (off) * 2)  // 端口模式控制
 
 #define PWPR_B0WI       BIT(7)  /* Bit Write Disable */
 #define PWPR_PFCWE      BIT(6) /* PFC Register Write Enable */
 
-#define PM(off)			(0x0100 + (off) * 2)
 #define PM_MASK			0x03
 #define PFC_MASK		0x7
-
-#define BIT(nr)			(1UL << (nr))
 
 // Function declarations
 static void rzg2ul_cpg_init(void);
@@ -49,27 +61,7 @@ static void rzg2ul_vcpd_init(void);
 static void rzg2ul_lcdc_start(void);
 static void rzg2ul_adv7513_init(void);
 
-// static void rzg2ul_set_gpio(int port, int pin, int mode){
-//     printf("Setting GPIO: port=%d, pin=%d, mode=%d\n", port, pin, mode);
-
-//     if(mode < 8){
-//         writeb(1 << pin, (void *)(0x11030000 + (port)));
-//     }else if(mode < 16){
-//         writeb(1 << (pin-8), (void *)(0x11030000 + (port)));
-//     }else if(mode < 24){
-//         writeb(1 << (pin-16), (void *)(0x11030000 + (port)));
-//     }else{
-//         writeb(1 << (pin-24), (void *)(0x11030000 + (port)));
-//     }
-
-//     printf("GPIO set: 0x11030000 + %d, value=%d\n", port, 1 << pin || reg_read(0x11030000 + (port)));
-//     reg_write(0x11030000 + (port*2) + 0x100, 2 << (pin-16)*2 || reg_read(0x11030000 + (port*2) + 0x100));
-//     printf("GPIO set: 0x11030000 + %d, value=%d\n", (port*2) + 0x100, 2 << (pin-16)*2 || reg_read(0x11030000 + (port*2) + 0x100));
-//     reg_write(0x11030000 + (port) + 0x200, 1 << pin || reg_read(0x11030000 + (port) + 0x200));
-//     printf("GPIO set: 0x11030000 + %d, value=%d\n", (port) + 0x200, 1 << pin || reg_read(0x11030000 + (port) + 0x200));
-//     reg_write(0x11030000 + (port*4) + 0x400, mode << pin*3 || reg_read(0x11030000 + (port*4) + 0x400));
-//     printf("GPIO set: 0x11030000 + %d, value=%d\n", (port*4) + 0x400, mode << pin*3 || reg_read(0x11030000 + (port*4) + 0x400));
-
+// 设置IO电平控制
 static void rzg2ul_set_iohl( u32 off,
 				 u8 pin, u8 strangth)
 {
@@ -87,6 +79,7 @@ static void rzg2ul_set_iohl( u32 off,
 	writel(reg | (strangth << (pin * 8)), addr);
 }
 
+// 设置转换速率控制
 static void rzg2ul_set_sr( u32 off,
 				 u8 pin, u8 mode)
 {
@@ -104,6 +97,7 @@ static void rzg2ul_set_sr( u32 off,
 	writel(reg | (mode << (pin * 8)), addr);
 }
 
+// 设置上下拉控制
 static void rzg2ul_set_pupd( u32 off,
 				 u8 pin, u8 mode)
 {
@@ -121,14 +115,20 @@ static void rzg2ul_set_pupd( u32 off,
 	writel(reg | (mode << (pin * 8)), addr);
 }
 
+// 设置GPIO
 static void rzg2ul_set_gpio(
-    u8 off, u8 pin, u8 func)
+    u8 off, u8 pin, u8 func, u8 set_strangth)
 {
     u32 reg;
 
     printf("Setting GPIO: port=%d, pin=%d, func=%d\n", off, pin, func);
 
-    
+    if(set_strangth != 0){
+        rzg2ul_set_iohl(off, pin, set_strangth); 
+    }
+
+    rzg2ul_set_sr(off, pin, 1);
+
 	/* Set pin to 'Non-use (Hi-Z input protection)'  */
 	reg = readw(0x11030000 + PM(off));
 	reg &= ~(PM_MASK << (pin * 2));
@@ -155,9 +155,8 @@ static void rzg2ul_set_gpio(
 	reg = readb(0x11030000 + PMC(off));
 	writeb(reg | BIT(pin), 0x11030000 + PMC(off));
 }
-//     // reg_write(0x11030000 + (port) + 0x1470, 1 << pin*8 || reg_read(0x11030000 + (port) + 0x1470));
-// }
 
+/* I2C Write Register */
 static int adv7513_i2c_reg_write(struct udevice *dev, uint addr, uint mask, uint data)
 {
     uint8_t valb;
@@ -198,128 +197,40 @@ static int adv7513_i2c_reg_read(struct udevice *dev, uint8_t addr, uint8_t *data
 // Video initialization function
 int rzg2ul_video_init(void)
 {
-    printf("Build at: 20230424 1916\r\n");
+    printf("Build at: 20241031 0057\r\n");
 
     rzg2ul_cpg_init();
 
     rzg2ul_adv7513_init();
 
-
-    rzg2ul_set_iohl(10 + 0x11, 2, 2); /* D0 */
-    rzg2ul_set_iohl(10 + 0x13, 1, 2); /* D1 */
-    rzg2ul_set_iohl(10 + 0x13, 0, 2); /* D2 */
-    rzg2ul_set_iohl(10 + 0x13, 4, 2); /* D3 */
-    rzg2ul_set_iohl(10 + 0x13, 3, 2); /* D4 */
-    rzg2ul_set_iohl(10 + 0x12, 1, 2); /* D5 */
-    rzg2ul_set_iohl(10 + 0x13, 2, 2); /* D6 */
-    rzg2ul_set_iohl(10 + 0x14, 0, 2); /* D7 */
-    rzg2ul_set_iohl(10 + 0x14, 2, 2); /* D8 */
-    rzg2ul_set_iohl(10 + 0x14, 1, 2); /* D9 */
-    rzg2ul_set_iohl(10 + 0x16, 0, 2); /* D10 */
-    rzg2ul_set_iohl(10 + 0x15, 0, 2); /* D11 */
-    rzg2ul_set_iohl(10 + 0x16, 1, 2); /* D12 */
-    rzg2ul_set_iohl(10 + 0x15, 1, 2); /* D13 */
-    rzg2ul_set_iohl(10 + 0x15, 3, 2); /* D14 */
-    rzg2ul_set_iohl(10 + 0x18, 0, 2); /* D15 */
-    rzg2ul_set_iohl(10 + 0x15, 2, 2); /* D16 */
-    rzg2ul_set_iohl(10 + 0x17, 0, 2); /* D17 */
-    rzg2ul_set_iohl(10 + 0x17, 2, 2); /* D18 */
-    rzg2ul_set_iohl(10 + 0x17, 1, 2); /* D19 */
-    rzg2ul_set_iohl(10 + 0x18, 1, 2); /* D20 */
-    rzg2ul_set_iohl(10 + 0x18, 2, 2); /* D21 */
-    rzg2ul_set_iohl(10 + 0x17, 3, 2); /* D22 */
-    rzg2ul_set_iohl(10 + 0x18, 3, 2); /* D23 */
-    rzg2ul_set_iohl(10 + 0x11, 0, 2); /* HSYNC */
-    rzg2ul_set_iohl(10 + 0x12, 0, 2); /* VSYNC */
-    rzg2ul_set_iohl(10 + 0x11, 1, 2); /* DE */
-
-    // rzg2l_set_pupd(10 + 0x11, 2, 1); /* D0 */
-    // rzg2l_set_pupd(10 + 0x13, 1, 1); /* D1 */
-    // rzg2l_set_pupd(10 + 0x13, 0, 1); /* D2 */
-    // rzg2l_set_pupd(10 + 0x13, 4, 1); /* D3 */
-    // rzg2l_set_pupd(10 + 0x13, 3, 1); /* D4 */
-    // rzg2l_set_pupd(10 + 0x12, 1, 1); /* D5 */
-    // rzg2l_set_pupd(10 + 0x13, 2, 1); /* D6 */
-    // rzg2l_set_pupd(10 + 0x14, 0, 1); /* D7 */
-    // rzg2l_set_pupd(10 + 0x14, 2, 1); /* D8 */
-    // rzg2l_set_pupd(10 + 0x14, 1, 1); /* D9 */
-    // rzg2l_set_pupd(10 + 0x16, 0, 1); /* D10 */
-    // rzg2l_set_pupd(10 + 0x15, 0, 1); /* D11 */
-    // rzg2l_set_pupd(10 + 0x16, 1, 1); /* D12 */
-    // rzg2l_set_pupd(10 + 0x15, 1, 1); /* D13 */
-    // rzg2l_set_pupd(10 + 0x15, 3, 1); /* D14 */
-    // rzg2l_set_pupd(10 + 0x18, 0, 1); /* D15 */
-    // rzg2l_set_pupd(10 + 0x15, 2, 1); /* D16 */
-    // rzg2l_set_pupd(10 + 0x17, 0, 1); /* D17 */
-    // rzg2l_set_pupd(10 + 0x17, 2, 1); /* D18 */
-    // rzg2l_set_pupd(10 + 0x17, 1, 1); /* D19 */
-    // rzg2l_set_pupd(10 + 0x18, 1, 1); /* D20 */
-    // rzg2l_set_pupd(10 + 0x18, 2, 1); /* D21 */
-    // rzg2l_set_pupd(10 + 0x17, 3, 1); /* D22 */
-    // rzg2l_set_pupd(10 + 0x18, 3, 1); /* D23 */
-    // rzg2l_set_pupd(10 + 0x11, 0, 1); /* HSYNC */
-    // rzg2l_set_pupd(10 + 0x12, 0, 1); /* VSYNC */
-    // rzg2l_set_pupd(10 + 0x11, 1, 1); /* DE */
-    // rzg2l_set_pupd(10 + 0x11, 3, 1); /* CLK */
-
-    rzg2ul_set_sr(10 + 0x11, 2, 1); /* D0 */
-    rzg2ul_set_sr(10 + 0x13, 1, 1); /* D1 */
-    rzg2ul_set_sr(10 + 0x13, 0, 1); /* D2 */
-    rzg2ul_set_sr(10 + 0x13, 4, 1); /* D3 */
-    rzg2ul_set_sr(10 + 0x13, 3, 1); /* D4 */
-    rzg2ul_set_sr(10 + 0x12, 1, 1); /* D5 */
-    rzg2ul_set_sr(10 + 0x13, 2, 1); /* D6 */
-    rzg2ul_set_sr(10 + 0x14, 0, 1); /* D7 */
-    rzg2ul_set_sr(10 + 0x14, 2, 1); /* D8 */
-    rzg2ul_set_sr(10 + 0x14, 1, 1); /* D9 */
-    rzg2ul_set_sr(10 + 0x16, 0, 1); /* D10 */
-    rzg2ul_set_sr(10 + 0x15, 0, 1); /* D11 */
-    rzg2ul_set_sr(10 + 0x16, 1, 1); /* D12 */
-    rzg2ul_set_sr(10 + 0x15, 1, 1); /* D13 */
-    rzg2ul_set_sr(10 + 0x15, 3, 1); /* D14 */
-    rzg2ul_set_sr(10 + 0x18, 0, 1); /* D15 */
-    rzg2ul_set_sr(10 + 0x15, 2, 1); /* D16 */
-    rzg2ul_set_sr(10 + 0x17, 0, 1); /* D17 */
-    rzg2ul_set_sr(10 + 0x17, 2, 1); /* D18 */
-    rzg2ul_set_sr(10 + 0x17, 1, 1); /* D19 */
-    rzg2ul_set_sr(10 + 0x18, 1, 1); /* D20 */
-    rzg2ul_set_sr(10 + 0x18, 2, 1); /* D21 */
-    rzg2ul_set_sr(10 + 0x17, 3, 1); /* D22 */
-    rzg2ul_set_sr(10 + 0x18, 3, 1); /* D23 */
-    rzg2ul_set_sr(10 + 0x11, 0, 1); /* HSYNC */
-    rzg2ul_set_sr(10 + 0x12, 0, 1); /* VSYNC */
-    rzg2ul_set_sr(10 + 0x11, 1, 1); /* DE */
-    rzg2ul_set_sr(10 + 0x11, 3, 1); /* CLK */
-
-
-    rzg2ul_set_gpio(10 + 0x11, 2, 6); /* D0 */
-    rzg2ul_set_gpio(10 + 0x13, 1, 6); /* D1 */
-    rzg2ul_set_gpio(10 + 0x13, 0, 6); /* D2 */
-    rzg2ul_set_gpio(10 + 0x13, 4, 6); /* D3 */
-    rzg2ul_set_gpio(10 + 0x13, 3, 6); /* D4 */
-    rzg2ul_set_gpio(10 + 0x12, 1, 6); /* D5 */
-    rzg2ul_set_gpio(10 + 0x13, 2, 6); /* D6 */
-    rzg2ul_set_gpio(10 + 0x14, 0, 6); /* D7 */
-    rzg2ul_set_gpio(10 + 0x14, 2, 6); /* D8 */
-    rzg2ul_set_gpio(10 + 0x14, 1, 6); /* D9 */
-    rzg2ul_set_gpio(10 + 0x16, 0, 6); /* D10 */
-    rzg2ul_set_gpio(10 + 0x15, 0, 6); /* D11 */
-    rzg2ul_set_gpio(10 + 0x16, 1, 6); /* D12 */
-    rzg2ul_set_gpio(10 + 0x15, 1, 6); /* D13 */
-    rzg2ul_set_gpio(10 + 0x15, 3, 6); /* D14 */
-    rzg2ul_set_gpio(10 + 0x18, 0, 6); /* D15 */
-    rzg2ul_set_gpio(10 + 0x15, 2, 6); /* D16 */
-    rzg2ul_set_gpio(10 + 0x17, 0, 6); /* D17 */
-    rzg2ul_set_gpio(10 + 0x17, 2, 6); /* D18 */
-    rzg2ul_set_gpio(10 + 0x17, 1, 6); /* D19 */
-    rzg2ul_set_gpio(10 + 0x18, 1, 6); /* D20 */
-    rzg2ul_set_gpio(10 + 0x18, 2, 6); /* D21 */
-    rzg2ul_set_gpio(10 + 0x17, 3, 6); /* D22 */
-    rzg2ul_set_gpio(10 + 0x18, 3, 6); /* D23 */
-    rzg2ul_set_gpio(10 + 0x11, 0, 6); /* HSYNC */
-    rzg2ul_set_gpio(10 + 0x12, 0, 6); /* VSYNC */
-    rzg2ul_set_gpio(10 + 0x11, 1, 6); /* DE */
-    rzg2ul_set_gpio(10 + 0x11, 3, 6); /* CLK */
+    rzg2ul_set_gpio(10 + 0x11, 2, 6,2); /* D0 */
+    rzg2ul_set_gpio(10 + 0x13, 1, 6,2); /* D1 */
+    rzg2ul_set_gpio(10 + 0x13, 0, 6,2); /* D2 */
+    rzg2ul_set_gpio(10 + 0x13, 4, 6,2); /* D3 */
+    rzg2ul_set_gpio(10 + 0x13, 3, 6,2); /* D4 */
+    rzg2ul_set_gpio(10 + 0x12, 1, 6,2); /* D5 */
+    rzg2ul_set_gpio(10 + 0x13, 2, 6,2); /* D6 */
+    rzg2ul_set_gpio(10 + 0x14, 0, 6,2); /* D7 */
+    rzg2ul_set_gpio(10 + 0x14, 2, 6,2); /* D8 */
+    rzg2ul_set_gpio(10 + 0x14, 1, 6,2); /* D9 */
+    rzg2ul_set_gpio(10 + 0x16, 0, 6,2); /* D10 */
+    rzg2ul_set_gpio(10 + 0x15, 0, 6,2); /* D11 */
+    rzg2ul_set_gpio(10 + 0x16, 1, 6,2); /* D12 */
+    rzg2ul_set_gpio(10 + 0x15, 1, 6,2); /* D13 */
+    rzg2ul_set_gpio(10 + 0x15, 3, 6,2); /* D14 */
+    rzg2ul_set_gpio(10 + 0x18, 0, 6,2); /* D15 */
+    rzg2ul_set_gpio(10 + 0x15, 2, 6,2); /* D16 */
+    rzg2ul_set_gpio(10 + 0x17, 0, 6,2); /* D17 */
+    rzg2ul_set_gpio(10 + 0x17, 2, 6,2); /* D18 */
+    rzg2ul_set_gpio(10 + 0x17, 1, 6,2); /* D19 */
+    rzg2ul_set_gpio(10 + 0x18, 1, 6,2); /* D20 */
+    rzg2ul_set_gpio(10 + 0x18, 2, 6,2); /* D21 */
+    rzg2ul_set_gpio(10 + 0x17, 3, 6,2); /* D22 */
+    rzg2ul_set_gpio(10 + 0x18, 3, 6,2); /* D23 */
+    rzg2ul_set_gpio(10 + 0x11, 0, 6,2); /* HSYNC */
+    rzg2ul_set_gpio(10 + 0x12, 0, 6,2); /* VSYNC */
+    rzg2ul_set_gpio(10 + 0x11, 1, 6,2); /* DE */
+    rzg2ul_set_gpio(10 + 0x11, 3, 6,0); /* CLK */
 
     run_command("rzg2ul_video_load_img", 0);
     rzg2ul_du_init();
@@ -602,9 +513,6 @@ static void rzg2ul_adv7513_init(void)
     }
     printf("ADV7513 chip revision: 0x%02x\n", chip_rev);
 
-    // 上电
-    // adv7513_i2c_reg_write(dev, ADV7513_POWER, 0xff, 0x10);
-
     // Write fixed registers
     for (i = 0; i < ARRAY_SIZE(adv7513_fixed_registers); i++)
     {
@@ -616,13 +524,4 @@ static void rzg2ul_adv7513_init(void)
             return ret;
         }
     }
-
-    // // Set 720p resolution
-    // adv7513_i2c_reg_write(dev, 0x15, 0xff, 0x01); // Input color depth and style
-    // adv7513_i2c_reg_write(dev, 0x16, 0xff, 0x38); // Output format: RGB888
-    // adv7513_i2c_reg_write(dev, 0x17, 0xff, 0x02); // Aspect ratio: 16:9
-    // adv7513_i2c_reg_write(dev, 0x18, 0xff, 0x46); // Set 720p timing
-    // adv7513_i2c_reg_write(dev, 0xaf, 0xff, 0x20); // Set HDMI mode
-
-    // printf("ADV7513 initialized for 720p RGB888\n");
 }
