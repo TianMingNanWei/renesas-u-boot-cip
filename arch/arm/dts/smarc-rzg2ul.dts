@@ -51,6 +51,37 @@
 				<RZG2L_PINMUX(10, 3, 1)>,
 				<RZG2L_PINMUX(10, 4, 1)>;
 	};
+
+	du_pins: du {
+		pinmux = <RZG2L_PINMUX(11, 2, 6)>, /* D0 */
+				 <RZG2L_PINMUX(13, 1, 6)>, /* D1 */
+				 <RZG2L_PINMUX(13, 0, 6)>, /* D2 */
+				 <RZG2L_PINMUX(13, 4, 6)>, /* D3 */
+				 <RZG2L_PINMUX(13, 3, 6)>, /* D4 */
+				 <RZG2L_PINMUX(12, 1, 6)>, /* D5 */
+				 <RZG2L_PINMUX(13, 2, 6)>, /* D6 */
+				 <RZG2L_PINMUX(14, 0, 6)>, /* D7 */
+				 <RZG2L_PINMUX(14, 2, 6)>, /* D8 */
+				 <RZG2L_PINMUX(14, 1, 6)>, /* D9 */
+				 <RZG2L_PINMUX(16, 0, 6)>, /* D10 */
+				 <RZG2L_PINMUX(15, 0, 6)>, /* D11 */
+				 <RZG2L_PINMUX(16, 1, 6)>, /* D12 */
+				 <RZG2L_PINMUX(15, 1, 6)>, /* D13 */
+				 <RZG2L_PINMUX(15, 3, 6)>, /* D14 */
+				 <RZG2L_PINMUX(18, 0, 6)>, /* D15 */
+				 <RZG2L_PINMUX(15, 2, 6)>, /* D16 */
+				 <RZG2L_PINMUX(17, 0, 6)>, /* D17 */
+				 <RZG2L_PINMUX(17, 2, 6)>, /* D18 */
+				 <RZG2L_PINMUX(17, 1, 6)>, /* D19 */
+				 <RZG2L_PINMUX(18, 1, 6)>, /* D20 */
+				 <RZG2L_PINMUX(18, 2, 6)>, /* D21 */
+				 <RZG2L_PINMUX(17, 3, 6)>, /* D22 */
+				 <RZG2L_PINMUX(18, 3, 6)>, /* D23 */
+				 <RZG2L_PINMUX(11, 0, 6)>, /* HSYNC */
+				 <RZG2L_PINMUX(12, 0, 6)>, /* VSYNC */
+				 <RZG2L_PINMUX(11, 1, 6)>, /* DE */
+				 <RZG2L_PINMUX(11, 3, 6)>; /* CLK */
+	};
 };
 
 &xinclk {
@@ -97,6 +128,12 @@
 };
 
 &i2c1 {
+	status = "okay";
+};
+
+&du {
+	pinctrl-names = "default";
+	pinctrl-0 = <&du_pins>;
 	status = "okay";
 };
 

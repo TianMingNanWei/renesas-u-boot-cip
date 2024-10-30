@@ -15,6 +15,7 @@
 #include "rzg2ul_def.h"
 
 /* Screen Header */
+// #include "poi_define_400P.h"
 #include "poi_define_720P.h"
 
 /* Du Define */
