@@ -23,7 +23,7 @@
 
 /* Screen Header */
 // #include "poi_define_480P.h"
-#include "poi_define_720P.h"
+#include "poi_define_272P.h"
 
 /* Du Define */
 
