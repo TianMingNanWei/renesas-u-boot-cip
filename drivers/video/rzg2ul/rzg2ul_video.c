@@ -203,6 +203,64 @@ int rzg2ul_video_init(void)
 
     rzg2ul_adv7513_init();
 
+    // GPIO	P6_0	IO	Display Out	DISP_CLK
+    // GPIO	P6_1	IO	Display Out	DISP_HSYNC
+    // GPIO	P7_0	IO	Display Out	DISP_VSYNC
+    // GPIO	P7_1	IO	Display Out	DISP_DE
+    // GPIO	P7_2	IO	Display Out	DISP_DATA0
+    // GPIO	P8_0	IO	Display Out	DISP_DATA1
+    // GPIO	P8_1	IO	Display Out	DISP_DATA2
+    // GPIO	P8_2	IO	Display Out	DISP_DATA3
+    // GPIO	P9_0	IO	Display Out	DISP_DATA4
+    // GPIO	P9_1	IO	Display Out	DISP_DATA5
+    // GPIO	P10_0	IO	Display Out	DISP_DATA6
+    // GPIO	P10_1	IO	Display Out	DISP_DATA7
+    // GPIO	P11_0	IO	Display Out	DISP_DATA8
+    // GPIO	P11_1	IO	Display Out	DISP_DATA9
+    // GPIO	P12_0	IO	Display Out	DISP_DATA10
+    // GPIO	P12_1	IO	Display Out	DISP_DATA11
+    // GPIO	P13_0	IO	Display Out	DISP_DATA12
+    // GPIO	P13_1	IO	Display Out	DISP_DATA13
+    // GPIO	P13_2	IO	Display Out	DISP_DATA14
+    // GPIO	P14_0	IO	Display Out	DISP_DATA15
+    // GPIO	P14_1	IO	Display Out	DISP_DATA16
+    // GPIO	P15_0	IO	Display Out	DISP_DATA17
+    // GPIO	P15_1	IO	Display Out	DISP_DATA18
+    // GPIO	P16_0	IO	Display Out	DISP_DATA19
+    // GPIO	P16_1	IO	Display Out	DISP_DATA20
+    // GPIO	P17_0	IO	Display Out	DISP_DATA21
+    // GPIO	P17_1	IO	Display Out	DISP_DATA22
+    // GPIO	P17_2	IO	Display Out	DISP_DATA23
+
+    // rzg2ul_set_gpio(0x10 + 7, 2, 1,2); /* D0 */
+    // rzg2ul_set_gpio(0x10 + 8, 0, 1,2); /* D1 */
+    // rzg2ul_set_gpio(0x10 + 8, 1, 1,2); /* D2 */
+    // rzg2ul_set_gpio(0x10 + 8, 2, 1,2); /* D3 */
+    // rzg2ul_set_gpio(0x10 + 9, 0, 1,2); /* D4 */
+    // rzg2ul_set_gpio(0x10 + 9, 1, 1,2); /* D5 */
+    // rzg2ul_set_gpio(0x10 + 10, 0, 1,2); /* D6 */
+    // rzg2ul_set_gpio(0x10 + 10, 1, 1,2); /* D7 */
+    // rzg2ul_set_gpio(0x10 + 11, 0, 1,2); /* D8 */
+    // rzg2ul_set_gpio(0x10 + 11, 1, 1,2); /* D9 */
+    // rzg2ul_set_gpio(0x10 + 12, 0, 1,2); /* D10 */
+    // rzg2ul_set_gpio(0x10 + 12, 1, 1,2); /* D11 */
+    // rzg2ul_set_gpio(0x10 + 13, 0, 1,2); /* D12 */
+    // rzg2ul_set_gpio(0x10 + 13, 1, 1,2); /* D13 */
+    // rzg2ul_set_gpio(0x10 + 13, 2, 1,2); /* D14 */
+    // rzg2ul_set_gpio(0x10 + 14, 0, 1,2); /* D15 */
+    // rzg2ul_set_gpio(0x10 + 14, 1, 1,2); /* D16 */
+    // rzg2ul_set_gpio(0x10 + 15, 0, 1,2); /* D17 */
+    // rzg2ul_set_gpio(0x10 + 15, 1, 1,2); /* D18 */
+    // rzg2ul_set_gpio(0x10 + 16, 0, 1,2); /* D19 */
+    // rzg2ul_set_gpio(0x10 + 16, 1, 1,2); /* D20 */
+    // rzg2ul_set_gpio(0x10 + 17, 0, 1,2); /* D21 */
+    // rzg2ul_set_gpio(0x10 + 17, 1, 1,2); /* D22 */
+    // rzg2ul_set_gpio(0x10 + 17, 2, 1,2); /* D23 */
+    // rzg2ul_set_gpio(0x10 + 6, 1, 1,2); /* HSYNC */
+    // rzg2ul_set_gpio(0x10 + 7, 0, 1,2); /* VSYNC */
+    // rzg2ul_set_gpio(0x10 + 7, 1, 1,2); /* DE */
+    // rzg2ul_set_gpio(0x10 + 6, 0, 1,0); /* CLK */
+
     rzg2ul_set_gpio(10 + 0x11, 2, 6,2); /* D0 */
     rzg2ul_set_gpio(10 + 0x13, 1, 6,2); /* D1 */
     rzg2ul_set_gpio(10 + 0x13, 0, 6,2); /* D2 */
@@ -272,7 +330,7 @@ static const uint32_t cpg_register_values[][2] = {
     {0x11010150, 0x000000ff | (CPG_PL5_INTIN << 16)},                                                     // CPG_SIPLL5_CLK4
     {0x11010144, 0x01110000 | (CPG_PL5_POSTDIV1 << 0) | (CPG_PL5_POSTDIV2 << 4) | (CPG_PL5_REFDIV << 8)}, // CPG_SIPLL5_CLK1
     {0x11010420, 0x01010000 | (CPG_DSI_DIV_A << 0) | (CPG_DSI_DIV_B << 8)},                               // CPG_PL5_SDIV
-    {0x11010154, (CPG_PL5_SPREAD << 0)},                                                                  // CPG_SIPLL5_CLK5
+    {0x11010154, (CPG_PL5_INTIN << 16)},                                                                  // CPG_SIPLL5_CLK5
     {0x11010140, 0x00150011},                                                                             // CPG_SIPLL5_STBY
     {0x1101056c, 0x00030003},                                                                             // CPG_CLKON_LCDC
     {0x11010580, 0x000f000f},                                                                             // CPG_CLKON_I2C
@@ -305,7 +363,7 @@ static const uint32_t du_register_values[][2] = {
     {0x1089001c, DU_DITR3_HSA(LCD_HSYNC) | DU_DITR3_HACTIVE(LCD_HACTIVE)},                // DU_DITR3
     {0x10890020, DU_DITR4_HBP(LCD_HBACK) | DU_DITR4_HFP(LCD_HFRONT)},                     // DU_DITR4
     {0x10890024, 0x00000000},                                                             // DU_DITR5
-    //	{0x10890040,0x00010000},//DU_MCR1 //patch for underflow
+    {0x10890040,0x00010000},//DU_MCR1 //patch for underflow
     {0x1089004c, 0x0000001F}, // DU_PBCR0 // check
     {0x10890050, 0x00000001}, // DU_PBCR1 // check
     {0x10890054, 0x00ff00ff}, // DU_PBCR2

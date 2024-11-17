@@ -42,10 +42,10 @@
 // VSPD parameters
 #define LCD_BPP             24   // 像素位深
 #define LCD_VIR             0    // 虚拟输入使能
-#define LCD_RDFMT           0x18 // 读格式
+#define LCD_RDFMT           0x14 // 读格式
 #define LCD_RDCSC           0    // 色彩空间转换使能
 #define LCD_SRCM_ADDR       0x58000000  // 源内存地址
-#define LCD_WRFMT           0x18 // 写格式
+#define LCD_WRFMT           0x00 // 写格式
 #define LCD_WRCSC           0    // 写色彩空间转换
 #define LCD_ODE             0    // 输出数据使能
 #define LCD_CFMT            0    // 色彩格式
