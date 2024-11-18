@@ -28,12 +28,12 @@
 // DU timing parameters for 480x272@60Hz (根据数据表调整)
 #define LCD_HACTIVE         480  // 水平有效像素
 #define LCD_VACTIVE         272  // 垂直有效行数
-#define LCD_HFRONT          5    // 水平前肩 (Thfp)
-#define LCD_HSYNC           40   // 水平同步 (Thbp)
-#define LCD_HBACK           40   // 水平后肩 (Thbp)
-#define LCD_VFRONT          8    // 垂直前肩 (Tvfp)
-#define LCD_VSYNC           8    // 垂直同步 (Tvb)
-#define LCD_VBACK           8    // 垂直后肩 (Tvb)
+#define LCD_HFRONT          2    // 水平前肩 (Thfp) - 从2+41+2变为2
+#define LCD_HSYNC           41   // 水平同步 (Thbp) - 保持41
+#define LCD_HBACK           2    // 水平后肩 (Thbp) - 从40变为2
+#define LCD_VFRONT          2    // 垂直前肩 (Tvfp) - 从8变为2
+#define LCD_VSYNC           10   // 垂直同步 (Tvb) - 从8变为10
+#define LCD_VBACK           2    // 垂直后肩 (Tvb) - 从8变为2
 #define LCD_VSPOL           1    // 垂直同步极性
 #define LCD_HSPOL           1    // 水平同步极性
 #define LCD_DEMD            0x3  // 数据使能模式

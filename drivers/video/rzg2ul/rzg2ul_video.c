@@ -306,10 +306,15 @@ int do_rzg2ul_video_init(struct cmd_tbl *cmdtp, int flag, int argc, char *const 
 
 int do_rzg2ul_video_load_img(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
-    dcache_disable();
     char buf[64] = {0};
+    int ret;
+
+
+    dcache_disable();
     snprintf(buf, sizeof(buf), "fatload mmc 1:1 0x%x boot_img.bin", LCD_SRCM_ADDR); // 使用snprintf防止溢出
-    return run_command(buf, 0);
+    ret = run_command(buf, 0);
+    dcache_enable();
+    return ret;
 }
 
 // U-Boot command definitions
